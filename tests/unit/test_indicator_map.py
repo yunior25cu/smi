@@ -89,6 +89,24 @@ def test_non_integer_plasqlid_raises(tmp_path):
         load_indicator_map(csv_path)
 
 
+def test_blank_institucion_id_raises(tmp_path):
+    csv_path = write_csv(
+        tmp_path,
+        "plasqlid,institucion_id,hoja,celda\n147,,DJ,G22\n",
+    )
+    with pytest.raises(IndicatorMapError, match="institucion_id"):
+        load_indicator_map(csv_path)
+
+
+def test_blank_hoja_raises(tmp_path):
+    csv_path = write_csv(
+        tmp_path,
+        "plasqlid,institucion_id,hoja,celda\n147,SMI,,G22\n",
+    )
+    with pytest.raises(IndicatorMapError, match="falta hoja"):
+        load_indicator_map(csv_path)
+
+
 def test_missing_required_column_raises(tmp_path):
     csv_path = write_csv(
         tmp_path,

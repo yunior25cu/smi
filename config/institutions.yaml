@@ -1,0 +1,5 @@
+instituciones:
+  - id: SMI
+    nombre: SMI
+    plantilla: templates/SMI/4315 Utilizacion.xlsx
+    hoja: DJ
