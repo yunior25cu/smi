@@ -3,14 +3,18 @@
 Llena automáticamente la hoja `DJ` de la plantilla Excel de cada institución
 con los valores calculados por el catálogo de indicadores SQL `MAGIK.PLACONSU`.
 
-Estado actual: **Fases 0 a 5 completas** según
-`prompt_proyecto_exportador_indicadores.md` (descubrimiento/setup, mapa de
-configuración indicador → celda, capa de acceso a datos, escritura en la
-plantilla Excel, orquestador/CLI, y endurecimiento/documentación). Ver
-"Pendiente de Fase 2" más abajo: falta conectar contra el data warehouse real
-(Oracle, según confirmó el usuario) — a propósito pospuesto para el final del
-proyecto, así que **todavía no se puede correr una exportación real de punta
-a punta** (el CLI llega hasta ahí y falla con un mensaje claro).
+Estado actual: **Fases 0 a 6 completas** según
+`prompt_proyecto_exportador_indicadores interfaz.md` (descubrimiento/setup,
+mapa de configuración indicador → celda, capa de acceso a datos, escritura
+en la plantilla Excel, orquestador/CLI, endurecimiento/documentación, e
+interfaz de escritorio empaquetable). Ver "Pendiente de Fase 2" más abajo:
+falta conectar contra el data warehouse real (Oracle, según confirmó el
+usuario) — a propósito pospuesto para el final del proyecto, así que
+**todavía no se puede correr una exportación real de punta a punta contra
+Oracle** (el CLI y la GUI llegan hasta ahí y fallan con un mensaje claro).
+Mientras tanto, se validó el pipeline completo de punta a punta contra datos
+reales cargados temporalmente en SQL Server (`DWFARREC`/`CLASCAT`, ver
+"Prueba real interina contra SQL Server").
 
 ## Instalación
 
@@ -138,14 +142,24 @@ Confirmado contra el entorno real: **Microsoft SQL Server 2022 Express**
   plantillas `.xlsx` ya convertidas por institución, separadas del archivo
   `.xls` original de producción. Ninguna de las dos se commitea (ver
   `.gitignore`).
-- Se inicializó un repositorio git local para el proyecto; **no se hizo ningún
-  commit todavía** (se hace solo cuando el usuario lo pida explícitamente).
-- **`config/indicator_map.csv` (Fase 1) es un CSV de ejemplo con 8 filas**,
-  usando `plasqlid` reales del catálogo (`147`, `420`, `819`, etc.) pero con
-  celdas de la hoja `DJ` **ilustrativas, no verificadas contra el mapeo real**
-  usuario-a-usuario de la plantilla. Poblar las ~750 filas reales queda para
-  cuando se arme el mapeo definitivo junto con el usuario (no es parte del
-  entregable de Fase 1, según el propio prompt).
+- Se inicializó un repositorio git local para el proyecto (los commits se
+  hacen solo cuando el usuario lo pide explícitamente).
+- **`config/indicator_map.csv` (Fase 1) arranca chico a propósito, con solo
+  mapeos confirmados contra la plantilla real** (no un CSV de ejemplo con
+  celdas ilustrativas). Se intentó primero cruzar automáticamente el texto de
+  concepto de `DJ` (columna A) contra `PLASQLNOM`/`PLASQLDESC` del catálogo,
+  asumiendo -como sugería el prompt- que existía una hoja de referencia
+  ("4315 Utilización") con el texto de `PLASQLDESC` al lado de cada celda de
+  valor. **Resultó ser falso**: esa hoja, en el archivo real, es solo una
+  copia calculada de `DJ` vía fórmulas (`=IF(DJ!G13="","",DJ!G13)`), sin
+  ningún texto de referencia adicional. Se probó además cruzar por texto
+  directamente: términos como "TICKET" o "CONSULTORIO" (presentes en
+  conceptos reales de `DJ`) aparecen **cero veces** en todo `PLASQLNOM`/
+  `PLASQLDESC`, confirmando que son dos vocabularios distintos y que no hay
+  forma automática confiable de derivar el mapeo. El usuario decidió, en
+  consecuencia, ir agregando filas de a una a medida que se confirman contra
+  la plantilla real (hoy: `147` → `DJ!G22`), en vez de intentar adivinar
+  ~750 celdas por texto.
 - **Duplicados de `plasqlid` en `indicator_map.csv`**: solo se rechaza cuando
   el mismo `plasqlid`, para la misma `institucion_id`, apunta a **celdas
   distintas** (mapeo ambiguo). Una fila repetida exactamente igual (mismo
@@ -228,6 +242,120 @@ dependen del data warehouse: el orquestador de la Fase 4 recibe
   protección de hoja: valores, `number_format`, celdas combinadas y el
   estado de protección quedan todos intactos.
 
+## Interfaz de escritorio (Fase 6)
+
+Ventana `tkinter` para personal de contable sin conocimientos técnicos, sin
+terminal ni Python instalado: capa de presentación pura sobre
+`run_export.py`, sin lógica de negocio propia.
+
+**Correr desde código fuente** (para desarrollo/pruebas):
+```
+python gui/app.py
+```
+
+**Uso**: elegir institución del desplegable, año y mes (o tildar "Rango de
+meses" y completar "Desde"/"Hasta" en formato `AAAA-MM`). El botón
+"Generar" queda deshabilitado hasta que los campos requeridos sean válidos.
+Mientras corre, muestra una barra de progreso y el estado en lenguaje llano
+("Consultando base de datos...", "Escribiendo Excel..."). Al terminar:
+- Si salió bien: mensaje con la ruta del archivo generado y la opción de
+  abrir la carpeta de salida.
+- Si el log de control encontró discrepancias: además del mensaje anterior,
+  ofrece abrir el log de control directamente.
+- Si algo falló: mensaje de error en español llano (nunca un stack trace de
+  Python en pantalla) — el detalle técnico completo queda en el log.
+
+**Conexión a la base de datos (decisión del usuario, Fase 6)**: el `.exe` se
+conecta **directo** a la base, igual que `src/cli.py` — mismas
+`connection.py`/`.env`, mismo stub de Oracle mientras siga pendiente. No hay
+un servicio intermedio. Esto significa que, en la máquina de quien use el
+`.exe`, va a haber credenciales de conexión a una base con datos de salud
+(vía `.env` junto al ejecutable). Es una decisión explícita, tomada con el
+trade-off conocido a cambio de simplicidad (no hay que construir ni operar
+un servicio intermedio).
+
+**Variante interina (`gui/app_test_mssql.py`)**: mientras Oracle no esté
+conectado, `gui/app.py` (la interfaz final) muestra "La conexión a la base de
+datos de indicadores todavía no está configurada" al generar, tal como está
+pensado. Para poder probar la GUI de punta a punta contra datos reales
+mientras tanto (igual que `scripts/run_export_test_mssql.py` para el CLI),
+existe esta variante: reutiliza `ExportadorApp` sin cambios, solo hace que
+`dw_conn` también apunte a SQL Server y usa
+`config/indicator_map.test_mssql.csv` en vez del real.
+
+```
+python gui/app_test_mssql.py
+```
+```
+pyinstaller build/exportador_test_mssql.spec
+```
+Genera `dist/ExportadorIndicadores_PRUEBA.exe` (nombre y título de ventana
+deliberadamente distintos al `.exe` final, para no confundirlos). Transitorio:
+se deja de usar cuando el conector Oracle esté implementado.
+
+### Empaquetado y distribución
+
+```
+pip install pyinstaller
+pyinstaller build/exportador.spec
+```
+
+Genera `dist/ExportadorIndicadores.exe` (probado: abre, carga las
+instituciones de `institutions.yaml`, y maneja errores de conexión con el
+mensaje traducido correspondiente). El `.exe` **no lleva embebidos**
+`config/` ni `templates/`: los resuelve relativos a su propia carpeta (no al
+directorio de trabajo actual, que no es controlable por alguien que hace
+doble clic), así que hay que copiar `config/`, `templates/` y `.env` **al
+lado** del `.exe` antes de distribuirlo. `requirements.txt` no incluye
+`pyinstaller` a propósito: es una herramienta de empaquetado puntual, no una
+dependencia del pipeline (mismo criterio que con `pywin32`/`xlrd` en la
+Fase 0).
+
+**Notas de plataforma**:
+- Windows SmartScreen muy probablemente marque el `.exe` sin firma la
+  primera vez que alguien lo ejecute ("Windows protegió su PC"). Es el
+  comportamiento esperado con un ejecutable sin firma digital, no un bug del
+  programa. Para distribuirlo hay que usar el canal de software aprobado de
+  la organización, o firmarlo si ya existe un certificado de firma de
+  código.
+- Toda escritura de archivo del pipeline (`control_log.py`, `indicator_map.py`)
+  ya fuerza `encoding="utf-8"` explícito, para no depender de la code page de
+  la consola de Windows (relevante: nombres de institución y descripciones
+  con tildes).
+
+### Decisiones de diseño de la Fase 6
+
+- **Las funciones de validación (`can_submit`, `is_valid_year`,
+  `is_valid_month_number`, `is_valid_year_month`) son puras**, sin ningún
+  import de `tkinter`, definidas a nivel de módulo en `gui/app.py`. Permite
+  testear la regla "el botón Generar queda deshabilitado con campos
+  incompletos" (pedida explícitamente por el prompt) sin instanciar ninguna
+  ventana.
+- **`run_pipeline()` (en `gui/app.py`) es la única función que abre
+  conexiones y corre `run_export`**, separada de la clase `ExportadorApp`:
+  se probó tanto en aislamiento (con conexiones reales, incluyendo el camino
+  de error del conector Oracle pendiente) como a través de la ventana real
+  (simulando un click en "Generar" con los diálogos de `tkinter`
+  interceptados, sin bloquear la terminal).
+- **La corrida real pasa a un hilo (`threading.Thread`) separado del hilo de
+  la interfaz**, con progreso reportado vía una `queue.Queue` que el hilo
+  principal consulta con `root.after(...)`. Sin esto, la ventana se congela
+  mientras dura la consulta a la base y la escritura del Excel.
+- **Rutas por defecto (`config/`, `output/`) relativas a la ubicación del
+  propio ejecutable** (`sys.executable` cuando está empaquetado,
+  `__file__` cuando corre desde código fuente), no al directorio de trabajo
+  actual: se detectó en las pruebas que depender del `cwd` es frágil para
+  alguien que abre el `.exe` con doble clic (no elige desde dónde se lanza).
+- **`gui/error_messages.py` nunca devuelve el texto crudo de una excepción**:
+  cada tipo de error mapeado tiene una frase fija en español llano, y
+  cualquier excepción no contemplada cae a un mensaje genérico. El detalle
+  técnico completo solo llega al log (`logging`), nunca a un cuadro de
+  diálogo.
+- **No se probó firmar el `.exe` ni configurar un canal de distribución
+  real** (fuera del alcance de este proyecto): queda documentada la
+  advertencia de SmartScreen, pero la resolución operativa (firma de código,
+  software aprobado interno) depende de la organización.
+
 ## Estructura del proyecto
 
 Ver `prompt_proyecto_exportador_indicadores.md`, sección 4, para la
@@ -245,6 +373,34 @@ Hoy esto llega hasta abrir la conexión al catálogo (SQL Server, funciona) y
 falla explícitamente al intentar abrir la conexión al data warehouse
 (Oracle, pendiente — ver "Pendiente de Fase 2"). Una vez armado ese
 conector, no hace falta tocar nada más de este flujo.
+
+## Prueba real interina contra SQL Server (mientras Oracle no está conectado)
+
+Para validar el pipeline de punta a punta antes de tener el conector Oracle,
+se creó `DWFARREC` y `CLASCAT` en la misma base `MAGIK` (SQL Server), con
+datos reales, como banco de pruebas temporal. `python -m src.cli` no sirve
+para esto: usa el conector Oracle (pendiente) para las consultas de datos.
+En su lugar:
+
+```
+python scripts/run_export_test_mssql.py --institucion SMI --anio 2026 --mes 5
+```
+
+Mismos parámetros que `src.cli` (`--institucion`, `--anio`/`--mes` o
+`--desde`/`--hasta`, `--output-dir`, `--log-level`). Este script abre **las
+dos conexiones contra SQL Server** (catálogo y "data warehouse" son la misma
+base por ahora) y usa `config/indicator_map.test_mssql.csv` en vez de
+`config/indicator_map.csv` -ese archivo real todavía tiene indicadores de
+ejemplo que apuntan a tablas que no existen (`DWAfilia`, `DWTecOrd`), y
+juntarlos todos en la misma corrida rompería la consulta consolidada
+completa (una sola tabla faltante frena a todos los indicadores de esa
+corrida, por diseño). `indicator_map.test_mssql.csv` solo tiene los dos
+indicadores que hoy tienen datos reales cargados (`147` y `94`, ambos sobre
+`dwfarrec`).
+
+Es un script transitorio: una vez que el conector Oracle esté implementado y
+`indicator_map.csv` tenga el mapeo real completo, se deja de usar y se pasa
+a `python -m src.cli` directamente.
 
 ## Cómo leer el log de control
 

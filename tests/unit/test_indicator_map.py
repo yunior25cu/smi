@@ -16,8 +16,11 @@ def write_csv(tmp_path: Path, content: str) -> Path:
 
 
 def test_real_config_csv_loads_ok():
+    # config/indicator_map.csv arranca chico a propósito: solo lleva
+    # mapeos plasqlid->celda confirmados contra la plantilla real (no
+    # ejemplos ilustrativos), y crece de a uno a medida que se validan.
     entries = load_indicator_map(REAL_CONFIG_CSV)
-    assert len(entries) == 8
+    assert len(entries) == 1
     assert entries[0].plasqlid == 147
     assert entries[0].institucion_id == "SMI"
     assert entries[0].hoja == "DJ"
