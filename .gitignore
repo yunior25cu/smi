@@ -1,0 +1,19 @@
+# Credenciales y config local
+.env
+config/*.local.*
+
+# Archivos Excel reales (plantillas de produccion y salidas generadas)
+*.xls
+*.xlsx
+!tests/fixtures/*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Salidas de exportacion
+output/
+*.log
