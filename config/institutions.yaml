@@ -2,4 +2,6 @@ instituciones:
   - id: SMI
     nombre: SMI
     plantilla: templates/SMI/4315 Utilizacion.xlsx
-    hoja: DJ
+    # Ojo: el nombre real de la hoja tiene un espacio final ("Utilizacion ").
+    # Sin las comillas, YAML lo recorta al parsear. No sacar las comillas.
+    hoja: "4315 Utilizacion "

@@ -1,0 +1,17 @@
+=== Propuesta de mapeo: 744 confirmados, 6 ambiguos, 0 huérfanos, 3 plasqlid duplicados ===
+
+Plasqlid que matchearon a más de una celda (3): mismo texto repetido en más de una columna de la plantilla
+  - plasqlid 65 -> celdas ['AN107', 'J107']
+  - plasqlid 1224 -> celdas ['AN153', 'H153']
+  - plasqlid 1226 -> celdas ['AP153', 'J153']
+
+Celdas ambiguas (6): mismo texto, varios plasqlid candidatos
+  - AN161: 'FUNCIONAL RESP C PRUEBA ORDENES F P1' -> candidatos [1432, 1434]
+  - AN39: 'Medico Referencia' -> candidatos [13, 14, 15, 16]
+  - AP161: 'FUNCIONAL RESP C PRUEBA ORDENES F P1' -> candidatos [1432, 1434]
+  - AP39: 'Medico Referencia' -> candidatos [13, 14, 15, 16]
+  - H39: 'Medico Referencia' -> candidatos [13, 14, 15, 16]
+  - J39: 'Medico Referencia' -> candidatos [13, 14, 15, 16]
+
+Celdas huérfanas (0): texto sin match en PLACONSU.PLASQLDESC
+  (ninguna)

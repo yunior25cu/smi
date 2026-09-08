@@ -1,7 +1,9 @@
 """Genera el log de control de una corrida: indicadores sin celda mapeada,
-celdas mapeadas con plasqlid inexistente en el catálogo, e indicadores con
-resultado NULL/vacío. Legible por un humano (regla transversal 7 del
-prompt), no solo un log técnico.
+celdas mapeadas con plasqlid inexistente en el catálogo, indicadores con
+resultado NULL/vacío, y celdas ORDENES/TICKET que después de la corrida
+siguen conteniendo texto en vez de un número (revisión 2 del prompt).
+Legible por un humano (regla transversal del prompt), no solo un log
+técnico.
 """
 
 from __future__ import annotations
@@ -23,9 +25,15 @@ class ControlLog:
     indicadores_sin_celda: tuple[CatalogEntry, ...]
     celdas_huerfanas: tuple[IndicatorMapEntry, ...]
     indicadores_nulos: tuple[IndicatorMapEntry, ...]
+    celdas_con_texto_residual: tuple[tuple[str, str], ...] = ()
 
     def has_issues(self) -> bool:
-        return bool(self.indicadores_sin_celda or self.celdas_huerfanas or self.indicadores_nulos)
+        return bool(
+            self.indicadores_sin_celda
+            or self.celdas_huerfanas
+            or self.indicadores_nulos
+            or self.celdas_con_texto_residual
+        )
 
 
 def build_control_log(
@@ -35,6 +43,7 @@ def build_control_log(
     catalog: Sequence[CatalogEntry],
     mapped_entries: Sequence[IndicatorMapEntry],
     values: dict[int, float | None],
+    celdas_con_texto_residual: Sequence[tuple[str, str]] = (),
 ) -> ControlLog:
     mapped_ids = {m.plasqlid for m in mapped_entries}
     catalog_ids = {c.plasqlid for c in catalog}
@@ -59,6 +68,7 @@ def build_control_log(
         indicadores_sin_celda=indicadores_sin_celda,
         celdas_huerfanas=celdas_huerfanas,
         indicadores_nulos=indicadores_nulos,
+        celdas_con_texto_residual=tuple(sorted(celdas_con_texto_residual)),
     )
 
 
@@ -89,6 +99,17 @@ def render_text(log: ControlLog) -> str:
     else:
         lines.append("  (ninguno)")
 
+    lines.append("")
+    lines.append(
+        f"Celdas ORDENES/TICKET que siguen con texto en vez de un número "
+        f"({len(log.celdas_con_texto_residual)}):"
+    )
+    if log.celdas_con_texto_residual:
+        for celda, texto in log.celdas_con_texto_residual:
+            lines.append(f"  - {celda}: {texto!r}")
+    else:
+        lines.append("  (ninguna)")
+
     return "\n".join(lines) + "\n"
 
 
@@ -111,4 +132,6 @@ def write_csv(log: ControlLog, path: str | Path) -> Path:
             writer.writerow(["celda_huerfana", m.plasqlid, f"{m.hoja}!{m.celda}"])
         for m in log.indicadores_nulos:
             writer.writerow(["resultado_nulo", m.plasqlid, m.celda])
+        for celda, texto in log.celdas_con_texto_residual:
+            writer.writerow(["texto_residual", "", f"{celda}: {texto}"])
     return path

@@ -24,7 +24,8 @@ def test_real_institutions_yaml_loads_ok():
     configs = load_institutions(REAL_INSTITUTIONS_YAML)
     assert len(configs) == 1
     assert configs[0].id == "SMI"
-    assert configs[0].hoja == "DJ"
+    # Espacio final a propósito: es el nombre real de la hoja en el archivo.
+    assert configs[0].hoja == "4315 Utilizacion "
 
 
 def test_valid_yaml_loads_ok(tmp_path):

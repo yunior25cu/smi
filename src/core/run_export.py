@@ -61,9 +61,17 @@ def run_export(
     }
 
     output_path = resolve_output_path(institucion_id, anio, mes, output_dir)
-    write_values(institution.plantilla, output_path, institution.hoja, cell_values)
+    write_result = write_values(institution.plantilla, output_path, institution.hoja, cell_values)
 
-    control_log = build_control_log(institucion_id, anio, mes, catalog, mapped_entries, values)
+    control_log = build_control_log(
+        institucion_id,
+        anio,
+        mes,
+        catalog,
+        mapped_entries,
+        values,
+        write_result.celdas_con_texto_residual,
+    )
     control_log_path = output_path.with_name(f"{output_path.stem}_control.txt")
     write_text(control_log, control_log_path)
 

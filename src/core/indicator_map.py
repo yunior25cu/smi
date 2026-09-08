@@ -66,7 +66,10 @@ def load_indicator_map(path: str | Path) -> list[IndicatorMapEntry]:
     for line_no, row in enumerate(rows, start=2):  # fila 1 = encabezado
         raw_id = (row.get("plasqlid") or "").strip()
         institucion_id = (row.get("institucion_id") or "").strip()
-        hoja = (row.get("hoja") or "").strip()
+        # OJO: "hoja" no se recorta. Algunos nombres de hoja reales tienen un
+        # espacio final legítimo (ej. "4315 Utilizacion "); recortarlo hace
+        # que después no matchee contra wb.sheetnames al escribir.
+        hoja = row.get("hoja") or ""
         celda = (row.get("celda") or "").strip()
 
         if not raw_id:
@@ -80,7 +83,7 @@ def load_indicator_map(path: str | Path) -> list[IndicatorMapEntry]:
 
         if not institucion_id:
             raise IndicatorMapError(f"{path}:{line_no}: falta institucion_id")
-        if not hoja:
+        if not hoja.strip():
             raise IndicatorMapError(f"{path}:{line_no}: falta hoja")
         if not CELL_PATTERN.match(celda):
             raise IndicatorMapError(

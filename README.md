@@ -1,20 +1,30 @@
 # Exportador de indicadores SQL a plantilla Excel
 
-Llena automáticamente la hoja `DJ` de la plantilla Excel de cada institución
-con los valores calculados por el catálogo de indicadores SQL `MAGIK.PLACONSU`.
+Llena automáticamente la hoja **`4315 Utilizacion `** (nombre real, con
+espacio final) de la plantilla Excel de cada institución con los valores
+calculados por el catálogo de indicadores SQL `MAGIK.PLACONSU`. Dentro de
+esa hoja, cada indicador escribe únicamente su celda de la columna
+**ORDENES/TICKET** — la columna **PRECIO** contigua nunca se toca.
 
-Estado actual: **Fases 0 a 6 completas** según
-`prompt_proyecto_exportador_indicadores interfaz.md` (descubrimiento/setup,
-mapa de configuración indicador → celda, capa de acceso a datos, escritura
-en la plantilla Excel, orquestador/CLI, endurecimiento/documentación, e
-interfaz de escritorio empaquetable). Ver "Pendiente de Fase 2" más abajo:
-falta conectar contra el data warehouse real (Oracle, según confirmó el
-usuario) — a propósito pospuesto para el final del proyecto, así que
-**todavía no se puede correr una exportación real de punta a punta contra
-Oracle** (el CLI y la GUI llegan hasta ahí y fallan con un mensaje claro).
-Mientras tanto, se validó el pipeline completo de punta a punta contra datos
-reales cargados temporalmente en SQL Server (`DWFARREC`/`CLASCAT`, ver
-"Prueba real interina contra SQL Server").
+> **Revisión 2 (cambio de lógica, `prompt_proyecto_exportador_indicadores_cambio_logica.md`):**
+> el entregable original de las Fases 0-6 era la hoja `DJ`. Se corrigió: el
+> entregable real es `4315 Utilizacion `. Todo el código y los tests ya están
+> adaptados a este cambio (`DJ` quedó completamente fuera de alcance,
+> confirmado con el usuario). Ver la sección "Revisión 2" más abajo para el
+> detalle completo.
+
+Estado actual: **Fases 0 a 6 completas**, más la Revisión 2 aplicada sobre
+todas ellas (descubrimiento/setup, mapa de configuración indicador → celda,
+capa de acceso a datos, escritura en la plantilla Excel, orquestador/CLI,
+endurecimiento/documentación, interfaz de escritorio empaquetable, y el
+cambio de hoja/columna destino). Ver "Pendiente de Fase 2" más abajo: falta
+conectar contra el data warehouse real (Oracle, según confirmó el usuario)
+— a propósito pospuesto para el final del proyecto, así que **todavía no se
+puede correr una exportación real de punta a punta contra Oracle** (el CLI y
+la GUI llegan hasta ahí y fallan con un mensaje claro). Mientras tanto, se
+validó el pipeline completo de punta a punta contra datos reales cargados
+temporalmente en SQL Server (`DWFARREC`/`CLASCAT`, ver "Prueba real interina
+contra SQL Server").
 
 ## Instalación
 
@@ -53,18 +63,34 @@ valores reales de contraseña.
    vas a usar en `--institucion` del CLI), `nombre`, `plantilla` (ruta al
    `.xlsx` de esa institución — si el archivo real es `.xls`, convertilo
    primero con `python scripts/convert_xls_to_xlsx.py <origen.xls>
-   <destino.xlsx>`), y `hoja` (el nombre de la hoja destino, `DJ` en la
-   plantilla conocida).
-2. Por cada indicador que quieras completar automáticamente, agregá una fila
-   a `config/indicator_map.csv`: `plasqlid` (el `PLASQLID` real de
-   `MAGIK.PLACONSU`, no el texto de `PLASQLDESC` — ver decisión 2 del
+   <destino.xlsx>`), y `hoja` (el nombre exacto de la hoja destino —
+   **verificalo contra el archivo real antes de escribirlo**, puede traer
+   espacios al final como en `"4315 Utilizacion "`; si lo lleva, tiene que
+   ir entre comillas en el YAML o Python lo recorta al parsear).
+2. **Si la plantilla ya trae, en cada celda ORDENES/TICKET, el texto de
+   `PLASQLDESC` como placeholder** (el caso real conocido: ver sección
+   "Revisión 2" más abajo), corré `tools/build_indicator_map.py` en vez de
+   armar el CSV a mano:
+   ```
+   python -m tools.build_indicator_map --template "ruta/a/la/plantilla.xlsx" \
+       --institucion MI_INSTITUCION --out-csv propuesto.csv --out-report revision.txt
+   ```
+   Te da un CSV con los mapeos que matchean sin ambigüedad (revisalo antes de
+   copiarlo a `config/indicator_map.csv`) y un reporte aparte con lo que
+   necesita ojo humano: celdas cuyo texto matchea más de un `plasqlid` en el
+   catálogo, y `plasqlid` que matchearon a más de una celda (típicamente el
+   mismo texto repetido en el bloque NO FONASA y FONASA de una fila).
+3. Si no hay ese placeholder (institución nueva sin plantilla pre-existente
+   con esa convención), agregá las filas a mano: `plasqlid` (el `PLASQLID`
+   real de `MAGIK.PLACONSU`, no el texto de `PLASQLDESC` — ver decisión 2 del
    prompt sobre por qué el texto no es una clave confiable), `institucion_id`
-   (el mismo `id` del paso 1), `hoja`, `celda` (ej. `G22`).
-3. Corré `load_indicator_map("config/indicator_map.csv")` (o simplemente
+   (el mismo `id` del paso 1), `hoja`, `celda` (ej. `H22` — la celda
+   ORDENES/TICKET, nunca la columna PRECIO contigua).
+4. Corré `load_indicator_map("config/indicator_map.csv")` (o simplemente
    `python -m src.cli ...`, que lo carga al arrancar) para validar el
    archivo: falla explícito si hay una celda con formato inválido o un
    `plasqlid` mapeado a dos celdas distintas para la misma institución.
-4. Cualquier indicador del catálogo que quede sin fila en
+5. Cualquier indicador del catálogo que quede sin fila en
    `indicator_map.csv` para esa institución no rompe la corrida: aparece
    listado en la sección "Indicadores del catálogo sin celda mapeada" del
    log de control, para completar de a poco.
@@ -358,9 +384,12 @@ Fase 0).
 
 ## Estructura del proyecto
 
-Ver `prompt_proyecto_exportador_indicadores.md`, sección 4, para la
-arquitectura completa planeada. El detalle de `config/indicator_map.csv` y
-`config/institutions.yaml` se define en la Fase 1.
+Ver `prompt_proyecto_exportador_indicadores_cambio_logica.md`, sección 4,
+para la arquitectura completa vigente (reemplaza la de
+`prompt_proyecto_exportador_indicadores.md`/`...interfaz.md`, que apuntaban
+a la hoja `DJ`). El detalle de `config/indicator_map.csv` y
+`config/institutions.yaml` se define en la Fase 1; `tools/build_indicator_map.py`
+se agregó en la Revisión 2 (ver esa sección más abajo).
 
 ## Cómo correr una exportación
 
@@ -405,12 +434,16 @@ a `python -m src.cli` directamente.
 ## Cómo leer el log de control
 
 Cada corrida genera, junto al `.xlsx` de salida, un archivo
-`{institucion}_{AAAA}_{MM}_control.txt` con tres secciones: indicadores del
-catálogo sin celda mapeada, celdas mapeadas cuyo `plasqlid` no existe en el
-catálogo, e indicadores con resultado `NULL`/vacío. El CLI también lo imprime
-por consola y termina con código de salida 1 si hay alguna discrepancia (0 si
-no hay ninguna). `src/core/control_log.py` también expone `write_csv()` para
-un formato tabular, si hace falta procesarlo con otra herramienta.
+`{institucion}_{AAAA}_{MM}_control.txt` con **cuatro** secciones (la cuarta
+se agregó en la Revisión 2): indicadores del catálogo sin celda mapeada,
+celdas mapeadas cuyo `plasqlid` no existe en el catálogo, indicadores con
+resultado `NULL`/vacío, y celdas ORDENES/TICKET que, después de escribir,
+siguen teniendo texto en vez de un número (atrapa tanto indicadores sin
+mapear como una celda mal apuntada en `indicator_map.csv`). El CLI también lo
+imprime por consola y termina con código de salida 1 si hay alguna
+discrepancia (0 si no hay ninguna). `src/core/control_log.py` también expone
+`write_csv()` para un formato tabular, si hace falta procesarlo con otra
+herramienta.
 
 ## Decisiones de diseño de la Fase 4
 
@@ -478,3 +511,97 @@ un formato tabular, si hace falta procesarlo con otra herramienta.
   Oracle, y dos casos límite del parser de `query_builder.py` (un `;` o una
   `,` dentro de un string literal, y una columna cuyo nombre contiene la
   palabra "from" como substring, ej. `fromage`).
+
+## Revisión 2: cambio de hoja/columna destino (`..._cambio_logica.md`)
+
+El entregable original (Fases 0-6) apuntaba a la hoja `DJ`. La parte
+interesada corrigió la especificación: **el entregable real es la hoja
+`4315 Utilizacion ` (con espacio final)**, y dentro de ella cada indicador
+tiene un par de columnas contiguas no simétricas:
+
+- **PRECIO** (ej. `G22`): valor administrativo ya cargado, correcto. Nunca
+  se escribe.
+- **ORDENES/TICKET** (ej. `H22`, inmediatamente a la derecha): hoy tiene,
+  como placeholder, el texto de `PLASQLDESC` del indicador que le
+  corresponde. Es la única celda que se escribe.
+
+Se confirmaron con el usuario las dos preguntas que el propio documento de
+cambio marcaba como no asumibles: **formato numérico `#,##0`** (entero, sin
+decimales — es una cantidad de órdenes/tickets, no un monto) y **`DJ` queda
+completamente fuera de alcance** (se dejó de escribir ahí).
+
+### `tools/build_indicator_map.py`: 744 de 750 celdas mapeadas automáticamente
+
+Antes de asumir que hacía falta armar ~750 filas a mano, se verificó
+directamente contra el archivo real si el placeholder que describe el
+prompt de verdad estaba ahí -**no siempre lo que un documento asume sobre un
+archivo real resulta cierto** (ya había pasado antes con la hoja de
+referencia "4315 Utilización" del documento anterior, que resultó ser solo
+una copia calculada de `DJ`, sin ningún texto de referencia). Esta vez sí:
+`H22` tenía literalmente el string `'RECETAS NF ANTICONCEPTIVOS DE
+EMERGENCIA'`, el `PLASQLDESC` exacto de `plasqlid=147`.
+
+Con eso confirmado, se construyó `tools/build_indicator_map.py` (lee los 756
+placeholders reales de la hoja, cruza cada uno contra
+`PLACONSU.PLASQLDESC` -y `PLASQLNOM` como respaldo, para las filas donde
+`PLASQLDESC` viene vacío- y separa el resultado en:
+
+- **744 confirmados** (match único, sin ambigüedad): son los que están hoy
+  en `config/indicator_map.csv`.
+- **6 ambiguos**: el mismo texto matchea más de un `plasqlid` en el
+  catálogo (ej. `"Medico Referencia"` → candidatos `[13, 14, 15, 16]`; no
+  hay forma de saber cuál corresponde a cada celda sin criterio humano).
+- **3 `plasqlid` con celdas duplicadas** (hallazgo no anticipado por el
+  documento, encontrado corriendo la herramienta contra el archivo real): el
+  mismo texto aparece repetido en el bloque NO FONASA y FONASA de una fila,
+  pero el catálogo solo tiene una entrada con esa descripción -sin este
+  chequeo, esos 3 `plasqlid` hubieran quedado mapeados a dos celdas
+  distintas, y `indicator_map.py` rechaza eso al cargar el CSV (correctamente:
+  así se descubrió el problema al validar el resultado, no adivinando).
+
+Los 9 casos que necesitan revisión humana (los 6 ambiguos + los 3
+duplicados) quedan documentados en `config/indicator_map_pendientes.txt`,
+generado por la misma herramienta, para resolver cuando alguien con contexto
+del negocio pueda decidir cuál celda le corresponde a cada `plasqlid`
+candidato.
+
+### Hallazgo adicional: `indicator_map.py` recortaba el nombre de hoja
+
+Al cargar el CSV real por primera vez, las 744 filas perdían el espacio
+final de `"4315 Utilizacion "` -`load_indicator_map` le hacía `.strip()` a
+la columna `hoja` sin excepción, pensado para limpiar espacios accidentales
+en un CSV escrito a mano, pero eso rompía silenciosamente el nombre real de
+la hoja (`wb.sheetnames` nunca hubiera encontrado
+`"4315 Utilizacion "` con un `"4315 Utilizacion"` sin espacio). Se corrigió
+para no recortar `hoja` -solo se valida que no esté vacía tras recortar
+espacios, sin descartar los que sean parte real del nombre-, y se agregó un
+test específico que lo cubre.
+
+### Otros cambios de código de esta revisión
+
+- **`template_writer.find_ordenes_ticket_columns()`** detecta las columnas
+  ORDENES/TICKET por su encabezado literal (fila con `"ORDENES/TICKET"`, con
+  una columna `"PRECIO N"` inmediatamente a la izquierda en la fila de
+  arriba), no por letra de columna fija -así no depende de que la próxima
+  institución tenga exactamente el mismo layout de columnas.
+- **`find_leftover_placeholder_cells()` no filtra por columna A vacía.**
+  Primer intento de la función sí filtraba, y encontraba solo 197 de 756
+  placeholders reales -la hoja tiene 22 celdas de concepto combinadas
+  verticalmente (el texto vive solo en la primera fila del combinado), así
+  que las filas de abajo del combinado tienen columna A vacía pero valores
+  ORDENES/TICKET reales. Se sacó ese filtro y el conteo coincidió
+  exactamente con el esperado.
+- **`write_values()` ahora devuelve un `WriteResult`** (antes devolvía
+  `Path` directo), con `celdas_con_texto_residual` incluido -se calcula en
+  la misma apertura del archivo, no reabriendo el workbook aparte.
+  `run_export.py` lo pasa a `build_control_log` para la cuarta sección del
+  log de control.
+- **`tests/fixtures/sample_workbook.xlsx` se regeneró** con la forma nueva
+  (hoja `"4315 Utilizacion "`, pares PRECIO/ORDENES-TICKET, un concepto
+  combinado verticalmente entre dos filas) -el fixture viejo (hoja `DJ`
+  simple) ya no representa la estructura real del entregable.
+- **`config/indicator_map.test_mssql.csv`** (la variante interina que usa
+  SQL Server para el data warehouse, ver más abajo) se redujo a un solo
+  indicador (`147 → H22`): el `94` que se usaba antes de prueba no forma
+  parte del mapeo real de esta plantilla (no todos los indicadores del
+  catálogo tienen celda en el archivo).
