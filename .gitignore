@@ -20,8 +20,9 @@ output/
 *.log
 
 # Artefactos de empaquetado (PyInstaller): se regeneran con
-# `pyinstaller build/<algo>.spec`, no se versionan. Solo los .spec (archivos
-# directos en build/) quedan versionados, no las subcarpetas de cache que
-# genera cada build (build/exportador/, build/exportador_test_mssql/, etc.).
+# `pyinstaller build/<algo>.spec`, no se versionan. Solo los .spec y
+# build/assets/ (el .ico real) quedan versionados, no las subcarpetas de
+# cache que genera cada build (build/exportador/, build/exportador_test_mssql/, etc.).
 build/*/
+!build/assets/
 dist/

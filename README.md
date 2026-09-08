@@ -276,8 +276,10 @@ terminal ni Python instalado: capa de presentación pura sobre
 
 **Correr desde código fuente** (para desarrollo/pruebas):
 ```
-python gui/app.py
+python -m gui.app
 ```
+(no `python gui/app.py` directo: al no correr como módulo, Python no
+encuentra el paquete `gui` para sus propios imports internos.)
 
 **Uso**: elegir institución del desplegable, año y mes (o tildar "Rango de
 meses" y completar "Desde"/"Hasta" en formato `AAAA-MM`). El botón
@@ -329,10 +331,13 @@ pyinstaller build/exportador.spec
 Genera `dist/ExportadorIndicadores.exe` (probado: abre, carga las
 instituciones de `institutions.yaml`, y maneja errores de conexión con el
 mensaje traducido correspondiente). El `.exe` **no lleva embebidos**
-`config/` ni `templates/`: los resuelve relativos a su propia carpeta (no al
-directorio de trabajo actual, que no es controlable por alguien que hace
-doble clic), así que hay que copiar `config/`, `templates/` y `.env` **al
-lado** del `.exe` antes de distribuirlo. `requirements.txt` no incluye
+`config/`, `templates/` ni `image/` (el logo de la ventana): los resuelve
+relativos a su propia carpeta (no al directorio de trabajo actual, que no es
+controlable por alguien que hace doble clic), así que hay que copiar
+`config/`, `templates/`, `image/` y `.env` **al lado** del `.exe` antes de
+distribuirlo. El ícono del propio `.exe` sí queda embebido (viene de
+`build/assets/smi.ico`, generado a partir del logo real -ver "Mejora visual
+de la GUI"). `requirements.txt` no incluye
 `pyinstaller` a propósito: es una herramienta de empaquetado puntual, no una
 dependencia del pipeline (mismo criterio que con `pywin32`/`xlrd` en la
 Fase 0).
@@ -605,3 +610,53 @@ test específico que lo cubre.
   indicador (`147 → H22`): el `94` que se usaba antes de prueba no forma
   parte del mapeo real de esta plantilla (no todos los indicadores del
   catálogo tienen celda en el archivo).
+
+## Mejora visual de la GUI (solo estética, ninguna regla de negocio cambió)
+
+A pedido explícito del usuario: mejorar el aspecto de la ventana para una
+demo a un cliente, sin tocar ninguna lógica. Todas las funciones puras
+(`can_submit`, `is_valid_year`, `run_pipeline`, etc.) quedaron exactamente
+igual -se verificó con la misma suite de tests (154 tests, sin cambios) antes
+y después-; lo único que cambió fue `_build_widgets`/`_apply_style` en
+`gui/app.py` y los `.spec` de PyInstaller.
+
+- **Ícono del `.exe`**: se recortó el isotipo cuadrado (círculo azul con
+  "SMI") del logo real (`image/logo_smi.png`) y se generó
+  `build/assets/smi.ico` (multi-resolución, 16 a 256px) con Pillow. Los dos
+  `.spec` (`exportador.spec`, `exportador_test_mssql.spec`) lo referencian
+  en `icon=`. Si después de recompilar Windows sigue mostrando el ícono
+  viejo en el explorador/barra de tareas, es caché de íconos de Windows, no
+  el archivo -se puede confirmar extrayendo el ícono embebido directamente
+  del `.exe` (`System.Drawing.Icon.ExtractAssociatedIcon`), que ya sale
+  correcto.
+- **Logo real en la ventana** (`gui/app.py`, `_load_logo_image`): usa
+  `tkinter.PhotoImage` directo -Tk 8.6 soporta PNG nativo, no hizo falta
+  agregar Pillow como dependencia de la GUI- con `.zoom(3,3).subsample(4,4)`
+  para escalarlo a 3/4 de su tamaño original (los únicos factores que
+  `PhotoImage` permite, al no tener un método de resize continuo). Si
+  `image/logo_smi.png` no está disponible, cae a mostrar el texto "SMI"
+  en su lugar en vez de fallar -incluida esa carpeta en la lista de cosas a
+  copiar junto al `.exe` (ver "Empaquetado y distribución").
+- **Bug real encontrado en el camino**: el label del logo se renderizaba a
+  4x4 píxeles (invisible) hasta corregirlo. Causa: se le había puesto un
+  estilo de `Frame` (`"Header.TFrame"`) a un widget `Label` -en el tema
+  `clam` de `ttk` eso rompe el cálculo de tamaño del layout en vez de fallar
+  con un error. Se verificó con una captura de pantalla real de la ventana
+  (no alcanzaba con que los tests de lógica pasaran) antes y después del
+  arreglo.
+- **Año como desplegable (`2025`-`2030`) en vez de campo de texto libre**:
+  mismo mecanismo de validación que antes (`is_valid_year` sigue validando
+  contra `MIN_ANIO`/`MAX_ANIO` sin cambios), solo cambió el widget
+  (`ttk.Combobox` en vez de `ttk.Entry`). El rango del desplegable es un
+  recorte deliberado más angosto que el rango que la lógica acepta (`2000`-
+  `2100`), pensado para el uso real de esta herramienta.
+- **Estilo general**: tema `ttk` `clam` (el único de los incluidos en Tk que
+  permite personalizar colores de fondo/texto de verdad) con una paleta
+  tomada del color de marca real del logo (`#00438D`), un encabezado con el
+  logo y el título, una tarjeta blanca para el formulario, y el botón
+  "Generar" con el color de marca de fondo. No se agregó ninguna librería de
+  temas de terceros (`ttkbootstrap`, `sv-ttk`, etc.): se mantuvo la decisión
+  original de la Fase 6 de no sumar dependencias nuevas a la GUI.
+- **`config/.env.example` no cambia; `image/` se suma a la lista de carpetas
+  a copiar junto al `.exe`** (además de `config/`, `templates/`, `.env`) al
+  distribuirlo -ver la sección de empaquetado más arriba.

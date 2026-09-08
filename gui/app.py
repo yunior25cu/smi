@@ -51,11 +51,32 @@ DEFAULT_INSTITUTIONS_YAML = BASE_DIR / "config" / "institutions.yaml"
 DEFAULT_INDICATOR_MAP_CSV = BASE_DIR / "config" / "indicator_map.csv"
 DEFAULT_OUTPUT_DIR = BASE_DIR / "output"
 
+# Mismo criterio de BASE_DIR que arriba: relativo al .exe empaquetado o al
+# proyecto en modo desarrollo, nunca al cwd.
+LOGO_PATH = BASE_DIR / "image" / "logo_smi.png"
+ICON_PATH = BASE_DIR / "build" / "assets" / "smi.ico"
+
 MESES = [
     (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
     (5, "Mayo"), (6, "Junio"), (7, "Julio"), (8, "Agosto"),
     (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre"),
 ]  # fmt: skip
+
+ANIOS = list(range(2025, 2031))
+
+# Paleta tomada del logo real (azul de marca #00438D). Solo estética -no
+# afecta ninguna regla de negocio ni de validación.
+PALETTE = {
+    "bg": "#eef1f5",
+    "card": "#ffffff",
+    "accent": "#00438d",
+    "accent_dark": "#00306b",
+    "accent_light": "#e8eff8",
+    "text": "#1f2933",
+    "muted": "#65748b",
+    "border": "#dbe1e8",
+    "disabled": "#aab4c2",
+}
 
 
 # --------------------------------------------------------------------------
@@ -198,83 +219,204 @@ class ExportadorApp:
         self.root = root
         self.root.title("Exportador de Indicadores")
         self.root.resizable(False, False)
+        self.root.configure(background=PALETTE["bg"])
+        self._set_window_icon()
 
         self._queue: "queue.Queue[object]" = queue.Queue()
         self._institutions: list[InstitutionConfig] = []
 
+        self._apply_style()
         self._build_widgets()
         self._load_institutions()
         self._update_generar_state()
 
+    # -- estética (look & feel; ninguna regla de negocio vive acá) --------
+
+    def _set_window_icon(self) -> None:
+        if ICON_PATH.exists():
+            try:
+                self.root.iconbitmap(str(ICON_PATH))
+            except tk.TclError:
+                pass  # ej. corriendo en un entorno sin soporte de .ico; no es crítico
+
+    def _apply_style(self) -> None:
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        base_font = ("Segoe UI", 10)
+        bold_font = ("Segoe UI Semibold", 10)
+        title_font = ("Segoe UI Semibold", 15)
+
+        style.configure("TFrame", background=PALETTE["bg"])
+        style.configure("Card.TFrame", background=PALETTE["card"])
+        style.configure("Header.TFrame", background=PALETTE["card"])
+
+        style.configure("TLabel", background=PALETTE["bg"], foreground=PALETTE["text"], font=base_font)
+        style.configure("Card.TLabel", background=PALETTE["card"], foreground=PALETTE["text"], font=base_font)
+        style.configure("CardBold.TLabel", background=PALETTE["card"], foreground=PALETTE["text"], font=bold_font)
+        style.configure("Muted.TLabel", background=PALETTE["card"], foreground=PALETTE["muted"], font=("Segoe UI", 9))
+        style.configure("Title.TLabel", background=PALETTE["card"], foreground=PALETTE["accent"], font=title_font)
+        style.configure("Header.TLabel", background=PALETTE["card"])
+
+        style.configure("TCheckbutton", background=PALETTE["card"], foreground=PALETTE["text"], font=base_font)
+        style.map("TCheckbutton", background=[("active", PALETTE["card"])])
+
+        style.configure(
+            "TCombobox",
+            fieldbackground=PALETTE["card"],
+            background=PALETTE["card"],
+            foreground=PALETTE["text"],
+            arrowcolor=PALETTE["accent"],
+            bordercolor=PALETTE["border"],
+            lightcolor=PALETTE["border"],
+            darkcolor=PALETTE["border"],
+            padding=4,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", PALETTE["card"]), ("disabled", PALETTE["bg"])],
+            foreground=[("disabled", PALETTE["disabled"])],
+        )
+
+        style.configure(
+            "Accent.TButton",
+            font=bold_font,
+            foreground="white",
+            background=PALETTE["accent"],
+            borderwidth=0,
+            focusthickness=0,
+            padding=(18, 10),
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("disabled", PALETTE["disabled"]), ("active", PALETTE["accent_dark"])],
+            foreground=[("disabled", "#eef1f5")],
+        )
+
+        style.configure(
+            "Accent.Horizontal.TProgressbar",
+            troughcolor=PALETTE["bg"],
+            background=PALETTE["accent"],
+            bordercolor=PALETTE["bg"],
+            lightcolor=PALETTE["accent"],
+            darkcolor=PALETTE["accent"],
+        )
+
+    def _load_logo_image(self) -> "tk.PhotoImage | None":
+        if not LOGO_PATH.exists():
+            return None
+        try:
+            img = tk.PhotoImage(file=str(LOGO_PATH))
+            # Achica un poco el logo original (378x84) para que quede
+            # proporcionado como cabecera de ventana, sin distorsionarlo
+            # (factor 3/4 vía zoom+subsample, los únicos que ofrece PhotoImage).
+            return img.zoom(3, 3).subsample(4, 4)
+        except tk.TclError:
+            return None
+
     # -- construcción de la ventana -----------------------------------
 
     def _build_widgets(self) -> None:
-        pad = {"padx": 8, "pady": 4}
-        frame = ttk.Frame(self.root, padding=12)
-        frame.grid(row=0, column=0, sticky="nsew")
+        outer = ttk.Frame(self.root, style="TFrame", padding=(0, 0, 0, 16))
+        outer.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(frame, text="Institución:").grid(row=0, column=0, sticky="w", **pad)
+        # --- Cabecera con el logo real de la institución -----------------
+        header = ttk.Frame(outer, style="Header.TFrame", padding=(20, 16))
+        header.grid(row=0, column=0, sticky="we")
+
+        self._logo_image = self._load_logo_image()  # referencia viva: evita que el GC la borre
+        if self._logo_image is not None:
+            ttk.Label(header, image=self._logo_image, style="Header.TLabel").grid(
+                row=0, column=0, sticky="w"
+            )
+        else:
+            ttk.Label(header, text="SMI", style="Title.TLabel").grid(row=0, column=0, sticky="w")
+
+        ttk.Label(header, text="Exportador de Indicadores", style="Title.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Separator(outer, orient="horizontal").grid(row=1, column=0, sticky="we")
+
+        # --- Tarjeta con el formulario ------------------------------------
+        card_wrap = ttk.Frame(outer, style="TFrame", padding=(20, 20))
+        card_wrap.grid(row=2, column=0, sticky="we")
+
+        card = ttk.Frame(card_wrap, style="Card.TFrame", padding=24)
+        card.grid(row=0, column=0, sticky="we")
+        card.columnconfigure((1, 3), weight=1)
+
+        pad = {"padx": (0, 10), "pady": 8}
+
+        ttk.Label(card, text="Institución", style="CardBold.TLabel").grid(row=0, column=0, sticky="w", **pad)
         self.institucion_var = tk.StringVar()
-        self.institucion_combo = ttk.Combobox(frame, textvariable=self.institucion_var, state="readonly", width=30)
-        self.institucion_combo.grid(row=0, column=1, columnspan=3, sticky="we", **pad)
+        self.institucion_combo = ttk.Combobox(card, textvariable=self.institucion_var, state="readonly", width=28)
+        self.institucion_combo.grid(row=0, column=1, columnspan=3, sticky="we", pady=8)
         self.institucion_var.trace_add("write", lambda *_a: self._update_generar_state())
+
+        ttk.Separator(card, orient="horizontal").grid(row=1, column=0, columnspan=4, sticky="we", pady=(8, 12))
 
         self.use_range_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            frame, text="Rango de meses", variable=self.use_range_var, command=self._on_toggle_range
-        ).grid(row=1, column=0, columnspan=2, sticky="w", **pad)
+            card, text="Usar un rango de meses", variable=self.use_range_var, command=self._on_toggle_range
+        ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(0, 12))
 
         # Mes unico
-        ttk.Label(frame, text="Año:").grid(row=2, column=0, sticky="w", **pad)
+        ttk.Label(card, text="Año", style="CardBold.TLabel").grid(row=3, column=0, sticky="w", **pad)
         self.anio_var = tk.StringVar()
-        self.anio_entry = ttk.Entry(frame, textvariable=self.anio_var, width=8)
-        self.anio_entry.grid(row=2, column=1, sticky="w", **pad)
+        self.anio_combo = ttk.Combobox(
+            card, textvariable=self.anio_var, state="readonly", width=10,
+            values=[str(a) for a in ANIOS],
+        )
+        self.anio_combo.grid(row=3, column=1, sticky="w", pady=8)
         self.anio_var.trace_add("write", lambda *_a: self._update_generar_state())
 
-        ttk.Label(frame, text="Mes:").grid(row=2, column=2, sticky="w", **pad)
+        ttk.Label(card, text="Mes", style="CardBold.TLabel").grid(row=3, column=2, sticky="w", **pad)
         self.mes_var = tk.StringVar()
         self.mes_combo = ttk.Combobox(
-            frame, textvariable=self.mes_var, state="readonly", width=12,
+            card, textvariable=self.mes_var, state="readonly", width=14,
             values=[f"{n:02d} - {nombre}" for n, nombre in MESES],
         )
-        self.mes_combo.grid(row=2, column=3, sticky="w", **pad)
+        self.mes_combo.grid(row=3, column=3, sticky="w", pady=8)
         self.mes_var.trace_add("write", lambda *_a: self._update_generar_state())
 
         # Rango
-        ttk.Label(frame, text="Desde (AAAA-MM):").grid(row=3, column=0, sticky="w", **pad)
+        ttk.Label(card, text="Desde (AAAA-MM)", style="CardBold.TLabel").grid(row=4, column=0, sticky="w", **pad)
         self.desde_var = tk.StringVar()
-        self.desde_entry = ttk.Entry(frame, textvariable=self.desde_var, width=10)
-        self.desde_entry.grid(row=3, column=1, sticky="w", **pad)
+        self.desde_entry = ttk.Entry(card, textvariable=self.desde_var, width=12)
+        self.desde_entry.grid(row=4, column=1, sticky="w", pady=8)
         self.desde_var.trace_add("write", lambda *_a: self._update_generar_state())
 
-        ttk.Label(frame, text="Hasta (AAAA-MM):").grid(row=3, column=2, sticky="w", **pad)
+        ttk.Label(card, text="Hasta (AAAA-MM)", style="CardBold.TLabel").grid(row=4, column=2, sticky="w", **pad)
         self.hasta_var = tk.StringVar()
-        self.hasta_entry = ttk.Entry(frame, textvariable=self.hasta_var, width=10)
-        self.hasta_entry.grid(row=3, column=3, sticky="w", **pad)
+        self.hasta_entry = ttk.Entry(card, textvariable=self.hasta_var, width=12)
+        self.hasta_entry.grid(row=4, column=3, sticky="w", pady=8)
         self.hasta_var.trace_add("write", lambda *_a: self._update_generar_state())
 
-        self.generar_btn = ttk.Button(frame, text="Generar", command=self._on_generar)
-        self.generar_btn.grid(row=4, column=0, columnspan=4, sticky="we", **pad)
+        self.generar_btn = ttk.Button(
+            card, text="Generar", style="Accent.TButton", command=self._on_generar, cursor="hand2"
+        )
+        self.generar_btn.grid(row=5, column=0, columnspan=4, sticky="we", pady=(16, 4))
 
-        self.progress = ttk.Progressbar(frame, mode="indeterminate")
-        self.progress.grid(row=5, column=0, columnspan=4, sticky="we", **pad)
+        self.progress = ttk.Progressbar(card, mode="indeterminate", style="Accent.Horizontal.TProgressbar")
+        self.progress.grid(row=6, column=0, columnspan=4, sticky="we", pady=(8, 0))
         self.progress.grid_remove()
 
         self.status_var = tk.StringVar(value="")
-        ttk.Label(frame, textvariable=self.status_var, foreground="gray20").grid(
-            row=6, column=0, columnspan=4, sticky="w", **pad
+        ttk.Label(card, textvariable=self.status_var, style="Muted.TLabel").grid(
+            row=7, column=0, columnspan=4, sticky="w", pady=(10, 0)
         )
 
         self._on_toggle_range()
 
     def _on_toggle_range(self) -> None:
         use_range = self.use_range_var.get()
-        state_single = "disabled" if use_range else "normal"
-        state_range = "normal" if use_range else "disabled"
-        self.anio_entry.configure(state=state_single)
+        self.anio_combo.configure(state=("disabled" if use_range else "readonly"))
         self.mes_combo.configure(state=("disabled" if use_range else "readonly"))
-        self.desde_entry.configure(state=state_range)
-        self.hasta_entry.configure(state=state_range)
+        self.desde_entry.configure(state=("normal" if use_range else "disabled"))
+        self.hasta_entry.configure(state=("normal" if use_range else "disabled"))
         self._update_generar_state()
 
     def _load_institutions(self) -> None:

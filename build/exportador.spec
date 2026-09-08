@@ -4,10 +4,11 @@
 Uso (desde la raíz del proyecto, con pyinstaller instalado):
     pyinstaller build/exportador.spec
 
-El resultado queda en dist/ExportadorIndicadores.exe. No incluye config/ ni
-templates/ dentro del .exe a propósito: esas carpetas son específicas de
-cada institución/servidor y se esperan al lado del .exe (ver README, sección
-"Empaquetado y distribución"), no embebidas en el binario.
+El resultado queda en dist/ExportadorIndicadores.exe. No incluye config/,
+templates/ ni image/ dentro del .exe a propósito: son específicas de cada
+institución/servidor y se esperan al lado del .exe (ver README, sección
+"Empaquetado y distribución"), no embebidas en el binario -salvo el ícono
+del propio ejecutable (build/assets/smi.ico), que PyInstaller sí incrusta.
 """
 
 import sys
@@ -53,5 +54,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # completar con un .ico propio antes de distribuir
+    icon=str(PROJECT_ROOT / "build" / "assets" / "smi.ico"),
 )
